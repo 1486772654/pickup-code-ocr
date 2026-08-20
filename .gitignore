@@ -1,0 +1,21 @@
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# Local order files and generated results may contain customer data.
+*.xls
+*.xlsx
+*.csv
+*.log
+
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
