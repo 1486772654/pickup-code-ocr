@@ -1,6 +1,7 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from bs4 import BeautifulSoup
 
@@ -9,6 +10,7 @@ from pickup_code_ocr import (
     extract_candidates,
     normalize_line,
     prefer_pickup_codes,
+    runtime_dir,
     set_cell_lines,
     unique_output_path,
 )
@@ -47,6 +49,13 @@ class CandidateExtractionTests(unittest.TestCase):
 
 
 class OutputFormattingTests(unittest.TestCase):
+    def test_runtime_dir_uses_executable_location_when_frozen(self):
+        executable = str(Path("C:/Portable/PickupCodeOCR.exe"))
+        with patch("pickup_code_ocr.sys.frozen", True, create=True), patch(
+            "pickup_code_ocr.sys.executable", executable
+        ):
+            self.assertEqual(runtime_dir(), Path("C:/Portable"))
+
     def test_cell_contains_one_compact_value(self):
         soup = BeautifulSoup("<table><tr><td>old</td></tr></table>", "html.parser")
         cell = soup.find("td")

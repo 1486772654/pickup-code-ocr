@@ -27,7 +27,16 @@ from rapidocr import RapidOCR
 
 DEFAULT_PROXY = "http://127.0.0.1:7897"
 IMAGE_TIMEOUT = (8, 45)
-TOOL_DIR = Path(__file__).resolve().parent
+
+
+def runtime_dir() -> Path:
+    """Return the user-visible tool directory for source and frozen builds."""
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parent
+
+
+TOOL_DIR = runtime_dir()
 
 
 @dataclass(frozen=True)
