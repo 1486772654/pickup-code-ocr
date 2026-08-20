@@ -7,7 +7,7 @@
 [![CI](https://github.com/1486772654/pickup-code-ocr/actions/workflows/ci.yml/badge.svg)](https://github.com/1486772654/pickup-code-ocr/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-[快速开始](#快速开始) · [处理规则](#处理规则) · [命令行用法](#命令行用法) · [许可证](#许可证)
+[快速开始](#快速开始) · [处理规则](#处理规则) · [命令行用法](#命令行用法) · [赞赏支持](#赞赏支持) · [许可证](#许可证)
 
 </div>
 
@@ -123,6 +123,20 @@ python -m compileall -q pickup_code_ocr.py tests
 - [ONNX Runtime](https://onnxruntime.ai/) 运行 OCR 模型。
 
 各依赖按其各自许可证发布。
+
+## 赞赏支持
+
+如果这个项目对你有帮助，欢迎在 GitHub 点一个 [Star](https://github.com/1486772654/pickup-code-ocr/stargazers)、提交 Issue 或分享给有需要的人。
+
+也可以自愿扫码支持后续维护：
+
+<p align="center">
+  <img src="docs/donate.png" alt="微信支付赞赏二维码" width="320" />
+</p>
+
+赞赏完全自愿，不影响项目功能、问题反馈或后续使用。
+
+如需替换收款码，只需要替换 `docs/donate.png`，不需要修改程序代码。
 
 ## 参与贡献
 
