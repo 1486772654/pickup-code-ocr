@@ -221,6 +221,9 @@ def unique_output_path(input_path: Path, output_dir: Path = TOOL_DIR) -> Path:
 
 def set_cell_lines(soup: BeautifulSoup, cell, lines: Iterable[str]) -> None:
     cell.clear()
+    existing_style = cell.get("style", "").strip()
+    text_style = "mso-number-format:'@';"
+    cell["style"] = f"{existing_style} {text_style}".strip()
     cleaned = [re.sub(r"\s+", "", line) for line in lines if line.strip()]
     for index, line in enumerate(cleaned):
         if index:
@@ -230,6 +233,45 @@ def set_cell_lines(soup: BeautifulSoup, cell, lines: Iterable[str]) -> None:
         item = soup.new_tag("span")
         item.string = line
         cell.append(item)
+
+
+def ensure_outlet_column(soup: BeautifulSoup, rows, pickup_index: int) -> int:
+    """Ensure a 快递网点 column immediately precedes 取件码."""
+    header_cells = rows[0].find_all(["th", "td"], recursive=False)
+    header_names = [cell.get_text(" ", strip=True) for cell in header_cells]
+    outlet_index = next(
+        (index for index, name in enumerate(header_names) if name in {"快递网点", "快递站", "网点"}),
+        None,
+    )
+
+    if outlet_index is None:
+        outlet_index = pickup_index
+        header_cell = soup.new_tag("td")
+        header_cell.string = "快递网点"
+        header_cells[pickup_index].insert_before(header_cell)
+        for row in rows[1:]:
+            cells = row.find_all("td", recursive=False)
+            if pickup_index < len(cells):
+                outlet_cell = soup.new_tag("td")
+                outlet_cell["style"] = cells[pickup_index].get("style", "")
+                cells[pickup_index].insert_before(outlet_cell)
+        return pickup_index + 1
+
+    if header_names[outlet_index] != "快递网点":
+        header_cells[outlet_index].clear()
+        header_cells[outlet_index].string = "快递网点"
+
+    if outlet_index == pickup_index - 1:
+        return pickup_index
+
+    for row in rows:
+        cells = row.find_all(["th", "td"], recursive=False)
+        if outlet_index < len(cells) and pickup_index <= len(cells):
+            outlet_cell = cells[outlet_index].extract()
+            current_pickup_index = pickup_index - 1 if outlet_index < pickup_index else pickup_index
+            cells = row.find_all(["th", "td"], recursive=False)
+            cells[current_pickup_index].insert_before(outlet_cell)
+    return pickup_index
 
 
 def process_file(
@@ -254,6 +296,8 @@ def process_file(
         pickup_index = header_names.index("取件码")
     except ValueError as exc:
         raise ValueError("没有找到名为“取件码”的列。") from exc
+
+    pickup_index = ensure_outlet_column(soup, rows, pickup_index)
 
     order_index = header_names.index("订单号") if "订单号" in header_names else None
     session = requests.Session()
