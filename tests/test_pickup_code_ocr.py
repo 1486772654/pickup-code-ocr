@@ -13,6 +13,8 @@ from pickup_code_ocr import (
     runtime_dir,
     set_cell_lines,
     ensure_outlet_column,
+    existing_pickup_values,
+    extract_outlet_labels,
     unique_output_path,
 )
 
@@ -93,6 +95,23 @@ class OutputFormattingTests(unittest.TestCase):
         set_cell_lines(soup, cell, [" 207 - 1 - 4105 "])
         self.assertEqual(cell.get_text(), "207-1-4105")
         self.assertIn("mso-number-format:'@';", cell.get("style", ""))
+
+    def test_ignores_outlet_text_following_images(self):
+        soup = BeautifulSoup(
+            "<table><tr><td><img src='x'>-锦和苏城快递中心</td></tr></table>",
+            "html.parser",
+        )
+        self.assertEqual(existing_pickup_values(soup.find("td")), [])
+
+    def test_extracts_outlets_in_image_order(self):
+        soup = BeautifulSoup(
+            "<table><tr><td><img src='1'>-锦和苏城快递中心,<img src='2'>-三创快递站</td></tr></table>",
+            "html.parser",
+        )
+        self.assertEqual(
+            extract_outlet_labels(soup.find("td")),
+            ["锦和苏城快递中心", "三创快递站"],
+        )
 
     def test_output_path_does_not_overwrite_existing_file(self):
         with tempfile.TemporaryDirectory() as temp_dir:
