@@ -12,6 +12,7 @@ from pickup_code_ocr import (
     prefer_pickup_codes,
     runtime_dir,
     set_cell_lines,
+    ensure_outlet_column,
     unique_output_path,
 )
 
@@ -49,6 +50,36 @@ class CandidateExtractionTests(unittest.TestCase):
 
 
 class OutputFormattingTests(unittest.TestCase):
+    def test_existing_station_column_is_renamed_and_moved_before_pickup(self):
+        soup = BeautifulSoup(
+            "<table><tr><td>取件码</td><td>订单号</td><td>快递站</td></tr>"
+            "<tr><td>1-1-1</td><td>A</td><td>锦和</td></tr></table>",
+            "html.parser",
+        )
+        rows = soup.find("table").find_all("tr", recursive=False)
+        self.assertEqual(ensure_outlet_column(soup, rows, 0), 0)
+        self.assertEqual(
+            [cell.get_text(strip=True) for cell in rows[0].find_all("td", recursive=False)],
+            ["快递网点", "取件码", "订单号"],
+        )
+        self.assertEqual(
+            [cell.get_text(strip=True) for cell in rows[1].find_all("td", recursive=False)],
+            ["锦和", "1-1-1", "A"],
+        )
+
+    def test_missing_station_column_is_inserted_before_pickup(self):
+        soup = BeautifulSoup(
+            "<table><tr><td>订单号</td><td>取件码</td></tr>"
+            "<tr><td>A</td><td>1-1-1</td></tr></table>",
+            "html.parser",
+        )
+        rows = soup.find("table").find_all("tr", recursive=False)
+        self.assertEqual(ensure_outlet_column(soup, rows, 1), 2)
+        self.assertEqual(
+            [cell.get_text(strip=True) for cell in rows[0].find_all("td", recursive=False)],
+            ["订单号", "快递网点", "取件码"],
+        )
+
     def test_runtime_dir_uses_executable_location_when_frozen(self):
         executable = str(Path("C:/Portable/PickupCodeOCR.exe"))
         with patch("pickup_code_ocr.sys.frozen", True, create=True), patch(
@@ -61,6 +92,7 @@ class OutputFormattingTests(unittest.TestCase):
         cell = soup.find("td")
         set_cell_lines(soup, cell, [" 207 - 1 - 4105 "])
         self.assertEqual(cell.get_text(), "207-1-4105")
+        self.assertIn("mso-number-format:'@';", cell.get("style", ""))
 
     def test_output_path_does_not_overwrite_existing_file(self):
         with tempfile.TemporaryDirectory() as temp_dir:
