@@ -210,6 +210,36 @@ def clean_existing_text(text: str) -> str:
     return text if text not in {",", "，"} else ""
 
 
+def existing_pickup_values(cell) -> list[str]:
+    """Extract manually typed pickup codes without image outlet labels."""
+    text_nodes = [str(node) for node in cell.find_all(string=True)]
+    if not text_nodes:
+        return []
+    candidates = prefer_pickup_codes(
+        extract_candidates(text_nodes, [1.0] * len(text_nodes))
+    )
+    return [candidate.value for candidate in candidates]
+
+
+def extract_outlet_labels(cell) -> list[str]:
+    """Read outlet labels written after each image in the pickup-code cell."""
+    labels: list[str] = []
+    for image in cell.find_all("img"):
+        suffix_parts: list[str] = []
+        for sibling in image.next_siblings:
+            if getattr(sibling, "name", None) == "img":
+                break
+            suffix_parts.append(
+                sibling.get_text(" ", strip=True)
+                if hasattr(sibling, "get_text")
+                else str(sibling)
+            )
+        suffix = "".join(suffix_parts).strip(" \t\r\n,，")
+        match = re.search(r"[-－—﹣]\s*([^,，]+)", suffix)
+        labels.append(match.group(1).strip() if match else suffix)
+    return labels
+
+
 def unique_output_path(input_path: Path, output_dir: Path = TOOL_DIR) -> Path:
     candidate = output_dir / f"{input_path.stem}_取件码已识别.xls"
     counter = 2
@@ -299,6 +329,10 @@ def process_file(
 
     pickup_index = ensure_outlet_column(soup, rows, pickup_index)
 
+    header_names = [
+        cell.get_text(" ", strip=True)
+        for cell in rows[0].find_all(["th", "td"], recursive=False)
+    ]
     order_index = header_names.index("订单号") if "订单号" in header_names else None
     session = requests.Session()
     session.headers.update({"User-Agent": "PickupCodeOCR/1.0"})
@@ -320,7 +354,9 @@ def process_file(
         stats["rows"] += 1
         pickup_cell = cells[pickup_index]
         images = pickup_cell.find_all("img")
-        original_text = clean_existing_text(pickup_cell.get_text(" ", strip=True))
+        original_values = existing_pickup_values(pickup_cell)
+        outlet_cell = cells[pickup_index - 1]
+        original_outlet = clean_existing_text(outlet_cell.get_text(" ", strip=True))
         order_number = ""
         if order_index is not None and order_index < len(cells):
             order_number = cells[order_index].get_text(" ", strip=True).replace("\xa0", "")
@@ -331,6 +367,8 @@ def process_file(
         stats["image_rows"] += 1
         stats["images"] += len(images)
         all_candidates: dict[str, float] = {}
+        candidate_outlets: dict[str, str] = {}
+        outlet_labels = extract_outlet_labels(pickup_cell)
         image_failures = 0
 
         print(f"第 {row_number} 行 / 订单 {order_number or '-'}：处理 {len(images)} 张图片")
@@ -348,22 +386,38 @@ def process_file(
                     all_candidates[candidate.value] = max(
                         all_candidates.get(candidate.value, 0.0), candidate.confidence
                     )
+                    candidate_outlets.setdefault(
+                        candidate.value,
+                        outlet_labels[image_number - 1]
+                        if image_number <= len(outlet_labels)
+                        else original_outlet,
+                    )
             except Exception as exc:  # Continue processing other images in the same order.
                 image_failures += 1
                 print(f"  图片 {image_number} 处理失败：{type(exc).__name__}: {exc}")
 
         values = list(all_candidates)
-        replacement = []
-        if original_text:
-            replacement.append(original_text)
-        replacement.extend(value for value in values if value not in replacement)
+        entries: list[tuple[str, str]] = []
+        seen_values: set[str] = set()
+        for value in original_values:
+            if value not in seen_values:
+                entries.append((original_outlet, value))
+                seen_values.add(value)
+        for value in values:
+            if value not in seen_values:
+                entries.append((candidate_outlets.get(value, original_outlet), value))
+                seen_values.add(value)
 
-        row_values = replacement or ["未提取到号码"]
-        set_cell_lines(soup, pickup_cell, [row_values[0]])
+        if not entries:
+            entries = [(original_outlet, "未提取到号码")]
+
+        set_cell_lines(soup, outlet_cell, [entries[0][0]] if entries[0][0] else [])
+        set_cell_lines(soup, pickup_cell, [entries[0][1]])
         anchor = row
-        for value in row_values[1:]:
+        for outlet, value in entries[1:]:
             cloned_row = copy.deepcopy(row)
             cloned_cells = cloned_row.find_all("td", recursive=False)
+            set_cell_lines(soup, cloned_cells[pickup_index - 1], [outlet] if outlet else [])
             set_cell_lines(soup, cloned_cells[pickup_index], [value])
             anchor.insert_after(cloned_row)
             anchor = cloned_row
