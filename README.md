@@ -160,3 +160,7 @@ python -m compileall -q pickup_code_ocr.py tests
 ## 许可证
 
 本项目采用 [MIT License](LICENSE)。
+
+## 联系方式
+
+作者邮箱：1486772654@qq.com。
